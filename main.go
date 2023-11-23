@@ -9,6 +9,7 @@ import (
 
 type CLI struct {
 	Bootstrap Bootstrap `cmd:"" help:"bootstrap resources for the config file"`
+	Deploy     Deploy    `cmd:"" help:"build and deploy image to servers"`
 }
 
 func main() {
