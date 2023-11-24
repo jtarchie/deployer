@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  format:
+    cmds:
+    - deno fmt README.md
+    - go generate ./...
+    - gofmt -w .
+  lint: golangci-lint run --fix --timeout "10m"
+  default:
+    cmds:
+    - task: format
+    - task: lint

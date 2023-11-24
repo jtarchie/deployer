@@ -1,0 +1,34 @@
+run:
+  skip-files:
+  - query/parse.go
+linters:
+  enable-all: true
+  disable:
+  - depguard
+  - exhaustruct
+  - paralleltest
+  - gomoddirectives
+  - lll
+  - revive
+
+  # cleanup later
+  - funlen
+  - cyclop
+  - gocognit
+  - nestif
+  - gocyclo
+  - maintidx
+  - forbidigo
+  - tagliatelle
+
+  # linters deprecated
+  - deadcode
+  - exhaustivestruct
+  - golint
+  - ifshort
+  - interfacer
+  - nosnakecase
+  - maligned
+  - scopelint
+  - structcheck
+  - varcheck

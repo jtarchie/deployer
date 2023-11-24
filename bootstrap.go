@@ -34,6 +34,7 @@ func (b *Bootstrap) Run() error {
 
 		fmt.Print("\nPlease add the following to your config file:\n\n")
 		fmt.Println("servers:")
+
 		for _, ip := range ips {
 			fmt.Printf("- %s\n", ip)
 		}

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -20,6 +21,8 @@ type DigitalOcean struct {
 	Size     string `yaml:"size"`
 }
 
+var ErrNoAPIToken = errors.New("no API token provided")
+
 func createDigitalOceanDroplets(
 	numInstances int,
 	sshPrivateKey string,
@@ -27,7 +30,7 @@ func createDigitalOceanDroplets(
 	config DigitalOcean,
 ) ([]string, error) {
 	if config.APIToken == "" {
-		return nil, fmt.Errorf("API token not provided")
+		return nil, ErrNoAPIToken
 	}
 
 	client := godo.NewFromToken(config.APIToken)
@@ -67,6 +70,7 @@ func createDigitalOceanDroplets(
 	}
 
 	names := []string{}
+
 	for index := 0; index < numInstances; index++ {
 		dropletName := fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 		names = append(names, dropletName)
@@ -92,15 +96,18 @@ func createDigitalOceanDroplets(
 		return nil, fmt.Errorf("could not create droplets: %w", err)
 	}
 
-	var action *godo.LinkAction
+	var action godo.LinkAction
+
 	for _, a := range response.Links.Actions {
 		if a.Rel == "create" {
-			action = &a
+			action = a
+
 			break
 		}
 	}
 
 	_ = util.WaitForActive(context.TODO(), client, action.HREF)
+
 	slog.Info("bootstrapping.droplets.complete", slog.Any("names", names))
 
 	ips, err = checkForIPs(client, prefix)

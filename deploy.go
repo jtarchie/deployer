@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -24,6 +25,8 @@ import (
 type Deploy struct {
 	Config string `help:"config file to deploy from" required:""`
 }
+
+var ErrNoServersProvider = errors.New("no servers were provided")
 
 func (d *Deploy) Run() error {
 	config, err := readConfig(d.Config)
@@ -70,7 +73,7 @@ func (d *Deploy) Run() error {
 
 	imageReader, err := client.ImageSave(context.Background(), []string{imageName})
 	if err != nil {
-			return fmt.Errorf("could not save image: %w", err)
+		return fmt.Errorf("could not save image: %w", err)
 	}
 	defer imageReader.Close()
 
@@ -78,25 +81,25 @@ func (d *Deploy) Run() error {
 	// Create a file to save the compressed image
 	outFile, err := os.Create(imageFilename)
 	if err != nil {
-			return fmt.Errorf("could not create output file: %w", err)
+		return fmt.Errorf("could not create output file: %w", err)
 	}
 	defer outFile.Close()
 
 	// Create a zstd writer
 	zstdWriter, err := zstd.NewWriter(outFile)
 	if err != nil {
-			return fmt.Errorf("could not create compression writer: %w", err)
+		return fmt.Errorf("could not create compression writer: %w", err)
 	}
 	defer zstdWriter.Close()
 
 	// Copy the image data to the zstd writer (this compresses and writes it)
 	_, err = io.Copy(zstdWriter, imageReader)
 	if err != nil {
-			return fmt.Errorf("could not save image: %w", err)
+		return fmt.Errorf("could not save image: %w", err)
 	}
 
 	if len(config.Servers) == 0 {
-		return fmt.Errorf("expected servers, list provided was size 0")
+		return ErrNoServersProvider
 	}
 
 	auth, err := goph.Key(kong.ExpandPath(config.SSH.PrivateKey), "")
@@ -105,10 +108,12 @@ func (d *Deploy) Run() error {
 	}
 
 	for _, server := range config.Servers {
+		var port uint = 22
+
 		client, err := goph.NewConn(&goph.Config{
 			User:     "root",
 			Addr:     server,
-			Port:     22,
+			Port:     port,
 			Auth:     auth,
 			Callback: VerifyHost,
 		})
@@ -126,7 +131,6 @@ func (d *Deploy) Run() error {
 		if err != nil {
 			return fmt.Errorf("could not copy image to server %s: %w", server, err)
 		}
-		// load into docker
 	}
 
 	return nil
@@ -149,5 +153,10 @@ func VerifyHost(host string, remote net.Addr, key ssh.PublicKey) error {
 	}
 
 	// Add the new host to known hosts file.
-	return goph.AddKnownHost(host, remote, key, "")
+	err = goph.AddKnownHost(host, remote, key, "")
+	if err != nil {
+		return fmt.Errorf("could not add server %s to known hosts: %w", host, err)
+	}
+
+	return nil
 }
