@@ -53,3 +53,4 @@ Brewfile.lock.json
 # End of https://www.toptal.com/developers/gitignore/api/go,homebrew,direnv,visualstudiocode
 
 config.yml
+*.zst

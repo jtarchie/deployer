@@ -11,6 +11,7 @@ import (
 )
 
 type Config struct {
+	RunDirectory string       `yaml:"run_directory"`
 	Service      string       `yaml:"service"`
 	Image        string       `yaml:"image"`
 	DigitalOcean DigitalOcean `yaml:"digital_ocean"`
@@ -33,7 +34,9 @@ func readConfig(filename string) (*Config, error) {
 		return nil, fmt.Errorf("could not read contents of file: %w", err)
 	}
 
-	var config Config
+	config := Config{
+		RunDirectory: "/var/run/deployer",
+	}
 
 	file, err := template.
 		New("").

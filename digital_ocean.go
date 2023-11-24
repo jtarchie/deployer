@@ -68,7 +68,7 @@ func createDigitalOceanDroplets(
 
 	names := []string{}
 	for index := 0; index < numInstances; index++ {
-		dropletName := fmt.Sprintf("-%d", prefix, time.Now().UnixNano())
+		dropletName := fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
 		names = append(names, dropletName)
 	}
 

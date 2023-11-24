@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +17,8 @@ import (
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/klauspost/compress/zstd"
+	"github.com/melbahja/goph"
+	"golang.org/x/crypto/ssh"
 )
 
 type Deploy struct {
@@ -71,8 +74,9 @@ func (d *Deploy) Run() error {
 	}
 	defer imageReader.Close()
 
+	imageFilename := filepath.Join(filepath.Dir(d.Config), "image.zst")
 	// Create a file to save the compressed image
-	outFile, err := os.Create("test.zst")
+	outFile, err := os.Create(imageFilename)
 	if err != nil {
 			return fmt.Errorf("could not create output file: %w", err)
 	}
@@ -91,5 +95,59 @@ func (d *Deploy) Run() error {
 			return fmt.Errorf("could not save image: %w", err)
 	}
 
+	if len(config.Servers) == 0 {
+		return fmt.Errorf("expected servers, list provided was size 0")
+	}
+
+	auth, err := goph.Key(kong.ExpandPath(config.SSH.PrivateKey), "")
+	if err != nil {
+		return fmt.Errorf("could not setup auth with ssh key: %w", err)
+	}
+
+	for _, server := range config.Servers {
+		client, err := goph.NewConn(&goph.Config{
+			User:     "root",
+			Addr:     server,
+			Port:     22,
+			Auth:     auth,
+			Callback: VerifyHost,
+		})
+		if err != nil {
+			return fmt.Errorf("could not connect to server %s: %w", server, err)
+		}
+		defer client.Close()
+
+		_, err = client.Run(fmt.Sprintf("mkdir -p %s/images", config.RunDirectory))
+		if err != nil {
+			return fmt.Errorf("could not create run directory: %w", err)
+		}
+
+		err = client.Upload(imageFilename, filepath.Join(config.RunDirectory, "images", "image.zst"))
+		if err != nil {
+			return fmt.Errorf("could not copy image to server %s: %w", server, err)
+		}
+		// load into docker
+	}
+
 	return nil
+}
+
+func VerifyHost(host string, remote net.Addr, key ssh.PublicKey) error {
+	// hostFound: is host in known hosts file.
+	// err: error if key not in known hosts file OR host in known hosts file but key changed!
+	hostFound, err := goph.CheckKnownHost(host, remote, key, "")
+
+	// Host in known hosts but key mismatch!
+	// Maybe because of MAN IN THE MIDDLE ATTACK!
+	if hostFound && err != nil {
+		return fmt.Errorf("key mismatch in known hosts file for %s: %w", host, err)
+	}
+
+	// handshake because public key already exists.
+	if hostFound && err == nil {
+		return nil
+	}
+
+	// Add the new host to known hosts file.
+	return goph.AddKnownHost(host, remote, key, "")
 }
