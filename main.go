@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/jtarchie/deployer/commands"
 	"log/slog"
 	"os"
 
@@ -8,8 +9,8 @@ import (
 )
 
 type CLI struct {
-	Bootstrap Bootstrap `cmd:"" help:"bootstrap resources for the config file"`
-	Deploy    Deploy    `cmd:"" help:"build and deploy image to servers"`
+	Bootstrap commands.Bootstrap `cmd:"" help:"bootstrap resources for the config file"`
+	Deploy    commands.Deploy    `cmd:"" help:"build and deploy image to servers"`
 }
 
 func main() {
