@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -14,6 +15,7 @@ import (
 	"github.com/docker/docker/api/types"
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/archive"
+	"github.com/klauspost/compress/zstd"
 )
 
 type Deploy struct {
@@ -25,8 +27,6 @@ func (d *Deploy) Run() error {
 	if err != nil {
 		return fmt.Errorf("could not load config file: %w", err)
 	}
-
-	// build image
 
 	client, err := docker.NewClientWithOpts(docker.FromEnv)
 	if err != nil {
@@ -47,25 +47,49 @@ func (d *Deploy) Run() error {
 		return fmt.Errorf("could not build tar of image contents: %w", err)
 	}
 
+	imageName := fmt.Sprintf("deployer-%s:%d", config.Service, time.Now().UnixNano())
+
 	response, err := client.ImageBuild(context.TODO(), tar, types.ImageBuildOptions{
 		Dockerfile: config.Builder.Dockerfile,
 		Tags: []string{
-			fmt.Sprintf("deployer-%s:%d", config.Service, time.Now().UnixNano()),
+			imageName,
 		},
 	})
 	if err != nil {
 		return fmt.Errorf("could not build image: %w", err)
 	}
-
-	var lastLine string
+	defer response.Body.Close()
 
 	scanner := bufio.NewScanner(response.Body)
 	for scanner.Scan() {
-		lastLine = scanner.Text()
 		slog.Info("build.line", slog.String("line", scanner.Text()))
 	}
 
-	fmt.Println(lastLine)
+	imageReader, err := client.ImageSave(context.Background(), []string{imageName})
+	if err != nil {
+			return fmt.Errorf("could not save image: %w", err)
+	}
+	defer imageReader.Close()
+
+	// Create a file to save the compressed image
+	outFile, err := os.Create("test.zst")
+	if err != nil {
+			return fmt.Errorf("could not create output file: %w", err)
+	}
+	defer outFile.Close()
+
+	// Create a zstd writer
+	zstdWriter, err := zstd.NewWriter(outFile)
+	if err != nil {
+			return fmt.Errorf("could not create compression writer: %w", err)
+	}
+	defer zstdWriter.Close()
+
+	// Copy the image data to the zstd writer (this compresses and writes it)
+	_, err = io.Copy(zstdWriter, imageReader)
+	if err != nil {
+			return fmt.Errorf("could not save image: %w", err)
+	}
 
 	return nil
 }
