@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"bytes"
@@ -29,7 +29,7 @@ type Config struct {
 	} `yaml:"bootstrap"`
 }
 
-func readConfig(filename string) (*Config, error) {
+func FromFile(filename string) (*Config, error) {
 	contents, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("could not read contents of file: %w", err)

@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	config "github.com/jtarchie/deployer/config"
+
 	"github.com/alecthomas/kong"
 	"github.com/docker/docker/api/types"
 	docker "github.com/docker/docker/client"
@@ -29,7 +31,7 @@ type Deploy struct {
 var ErrNoServersProvider = errors.New("no servers were provided")
 
 func (d *Deploy) Run() error {
-	config, err := readConfig(d.Config)
+	config, err := config.FromFile(d.Config)
 	if err != nil {
 		return fmt.Errorf("could not load config file: %w", err)
 	}

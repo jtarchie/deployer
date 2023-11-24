@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"log/slog"
+
+	"github.com/jtarchie/deployer/config"
 )
 
 type Bootstrap struct {
@@ -10,7 +12,7 @@ type Bootstrap struct {
 }
 
 func (b *Bootstrap) Run() error {
-	config, err := readConfig(b.Config)
+	config, err := config.FromFile(b.Config)
 	if err != nil {
 		return fmt.Errorf("could not load config file: %w", err)
 	}
