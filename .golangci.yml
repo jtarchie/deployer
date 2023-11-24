@@ -12,7 +12,7 @@ linters:
   - revive
 
   # cleanup later
-  - funlen
+#  - funlen
   - cyclop
   - gocognit
   - nestif

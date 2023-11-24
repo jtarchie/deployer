@@ -20,11 +20,10 @@ func (b *Bootstrap) Run() error {
 	slog.Info("bootstrap.start", slog.Int("outstanding", outstanding))
 
 	if 0 < outstanding {
-		ips, err := createDigitalOceanDroplets(
+		ips, err := config.DigitalOcean.Execute(
 			outstanding,
 			config.SSH.PrivateKey,
 			fmt.Sprintf("deployer-%s", config.Service),
-			config.DigitalOcean,
 		)
 		if err != nil {
 			return fmt.Errorf("could not bootstrap machines: %w", err)

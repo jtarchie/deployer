@@ -7,14 +7,15 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig/v3"
+	"github.com/jtarchie/deployer/providers"
 	"gopkg.in/yaml.v3"
 )
 
 type Config struct {
-	RunDirectory string       `yaml:"run_directory"`
-	Service      string       `yaml:"service"`
-	Image        string       `yaml:"image"`
-	DigitalOcean DigitalOcean `yaml:"digital_ocean"`
+	RunDirectory string                 `yaml:"run_directory"`
+	Service      string                 `yaml:"service"`
+	Image        string                 `yaml:"image"`
+	DigitalOcean providers.DigitalOcean `yaml:"digital_ocean"`
 	Builder      struct {
 		Dockerfile string `yaml:"dockerfile"`
 		Context    string `yaml:"context"`

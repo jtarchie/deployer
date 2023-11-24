@@ -1,4 +1,4 @@
-package main
+package providers
 
 import (
 	"context"
@@ -23,11 +23,10 @@ type DigitalOcean struct {
 
 var ErrNoAPIToken = errors.New("no API token provided")
 
-func createDigitalOceanDroplets(
+func (config *DigitalOcean) Execute(
 	numInstances int,
 	sshPrivateKey string,
 	prefix string,
-	config DigitalOcean,
 ) ([]string, error) {
 	if config.APIToken == "" {
 		return nil, ErrNoAPIToken
@@ -36,39 +35,35 @@ func createDigitalOceanDroplets(
 	client := godo.NewFromToken(config.APIToken)
 	sshKeyPath := kong.ExpandPath(sshPrivateKey)
 
-	ips, _ := checkForIPs(client, prefix)
+	ips, _ := checkForLatestIPs(client, prefix)
 	if len(ips) == numInstances {
 		return ips, nil
 	}
 
-	privateKey, err := pemutil.Read(sshKeyPath)
+	sshPublicKey, err := config.sshPublicKey(sshKeyPath)
 	if err != nil {
-		return nil, fmt.Errorf("could not read private key: %w", err)
+		return nil, fmt.Errorf("could not load public key: %w", err)
 	}
 
-	publicKey, err := keyutil.PublicKey(privateKey)
+	err = config.createSSHKey(client, sshPublicKey, prefix)
 	if err != nil {
-		return nil, fmt.Errorf("could not read public key: %w", err)
+		return nil, fmt.Errorf("could not create SSH key: %w", err)
 	}
 
-	sshPublicKey, err := ssh.NewPublicKey(publicKey)
+	err = config.createDroplets(numInstances, prefix, client, sshPublicKey)
 	if err != nil {
-		return nil, fmt.Errorf("could not get ssh public key: %w", err)
+		return nil, fmt.Errorf("could create droplets: %w", err)
 	}
 
-	key, _, _ := client.Keys.GetByFingerprint(context.TODO(), ssh.FingerprintLegacyMD5(sshPublicKey))
-	if key == nil {
-		slog.Info("bootstrapping.key.create")
-
-		_, _, err = client.Keys.Create(context.TODO(), &godo.KeyCreateRequest{
-			Name:      fmt.Sprintf("%s-key", prefix),
-			PublicKey: string(ssh.MarshalAuthorizedKey(sshPublicKey)),
-		})
-		if err != nil {
-			return nil, fmt.Errorf("could not create ssh key: %w", err)
-		}
+	ips, err = checkForLatestIPs(client, prefix)
+	if err != nil {
+		return nil, fmt.Errorf("could not get IPs: %w", err)
 	}
 
+	return ips, nil
+}
+
+func (config *DigitalOcean) createDroplets(numInstances int, prefix string, client *godo.Client, sshPublicKey ssh.PublicKey) error {
 	names := []string{}
 
 	for index := 0; index < numInstances; index++ {
@@ -93,7 +88,7 @@ func createDigitalOceanDroplets(
 		Tags: []string{prefix},
 	})
 	if err != nil {
-		return nil, fmt.Errorf("could not create droplets: %w", err)
+		return fmt.Errorf("could not create droplets: %w", err)
 	}
 
 	var action godo.LinkAction
@@ -110,15 +105,47 @@ func createDigitalOceanDroplets(
 
 	slog.Info("bootstrapping.droplets.complete", slog.Any("names", names))
 
-	ips, err = checkForIPs(client, prefix)
-	if err != nil {
-		return nil, fmt.Errorf("could not get IPs: %w", err)
-	}
-
-	return ips, nil
+	return nil
 }
 
-func checkForIPs(client *godo.Client, prefix string) ([]string, error) {
+func (config *DigitalOcean) createSSHKey(client *godo.Client, sshPublicKey ssh.PublicKey, prefix string) error {
+	key, _, _ := client.Keys.GetByFingerprint(context.TODO(), ssh.FingerprintLegacyMD5(sshPublicKey))
+	if key == nil {
+		slog.Info("bootstrapping.key.create")
+
+		_, _, err := client.Keys.Create(context.TODO(), &godo.KeyCreateRequest{
+			Name:      fmt.Sprintf("%s-key", prefix),
+			PublicKey: string(ssh.MarshalAuthorizedKey(sshPublicKey)),
+		})
+		if err != nil {
+			return fmt.Errorf("could not create ssh key: %w", err)
+		}
+	}
+
+	return nil
+}
+
+//nolint: ireturn
+func (config *DigitalOcean) sshPublicKey(sshKeyPath string) (ssh.PublicKey, error) {
+	privateKey, err := pemutil.Read(sshKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("could not read private key: %w", err)
+	}
+
+	publicKey, err := keyutil.PublicKey(privateKey)
+	if err != nil {
+		return nil, fmt.Errorf("could not read public key: %w", err)
+	}
+
+	sshPublicKey, err := ssh.NewPublicKey(publicKey)
+	if err != nil {
+		return nil, fmt.Errorf("could not get ssh public key: %w", err)
+	}
+
+	return sshPublicKey, nil
+}
+
+func checkForLatestIPs(client *godo.Client, prefix string) ([]string, error) {
 	droplets, _, err := client.Droplets.ListByTag(
 		context.TODO(),
 		prefix,
